@@ -8,7 +8,7 @@ from Tokeniser import patch_size, step_size, P, V, X
 
 #------------------------------------------TRAINING PARAMETERS----------------------------------------------------#
 
-N_STEPS = 8000  # gradient steps
+N_STEPS_PER_RESTART = 8000  # gradient steps
 BATCH_SIZE = 128  # spectra per batch
 LR = 1e-4  # AdamW learning rate
 WEIGHT_DECAY = 0.01  # AdamW weight decay
@@ -16,6 +16,7 @@ BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 1.0  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
 NUM_RESTARTS = 1  # number of annealing cycles
+N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 
 
 #-------------------------------------------------MASKING-----------------------------------------------------------#
@@ -74,22 +75,22 @@ if __name__ == '__main__':
     # Entire dataset fits in memory — pin Y and V on device permanently.
     # P is (T, D_EMB) — shared across all spectra; kept on device, not batched.
     N = X.shape[0]
-    Y_dev = torch.from_numpy(Y).float().to(device)
+    Y_dev = torch.from_numpy(X).float().to(device)
     V_dev = torch.from_numpy(V).bool().to(device)
     P_dev = torch.from_numpy(P).float().to(device)
 
     model = SpecML(patch_dim=patch_size + 2).to(device)
-    opt = torch.optim.AdamW(
-        model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=BETAS
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        opt, T_0=N_STEPS // NUM_RESTARTS, eta_min=SCHED_ETA_MIN
-    )
+    opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=BETAS)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=N_STEPS_PER_RESTART, eta_min=SCHED_ETA_MIN)
+
+    # Set random seed
+    rng = torch.Generator(device=device)
+    rng.manual_seed(0)
 
     loss_curve = []
     step = 0
     while step < N_STEPS:
-        perm = torch.randperm(N, device=device)
+        perm = torch.randperm(N, device=device, generator=rng)
         for start in range(0, N, BATCH_SIZE):
             idx = perm[start : start + BATCH_SIZE]
             y_b, v_b = Y_dev[idx], V_dev[idx]

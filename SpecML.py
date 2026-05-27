@@ -8,8 +8,6 @@ D_emb = 64 #Embedding Dimension
 n_heads = 4 #The number of parallel attentions you do at the same time 
 n_layers = 4  #The number of times a block is stacked, each time different weights will be learnt 
 ffn_dim = 4 * D_emb #Dimension of Feed Forward Network, FFN is how the vectors communicate within the vectors 
-patch_size = 20
-
 #------------------------------------------ATTENTION----------------------------------------------------#
 
 class SpectralAttention(nn.Module):
@@ -63,7 +61,7 @@ class SpectralBlock(nn.Module):
 #------------------------------------------THE MODEL: SpecML----------------------------------------------------#
 
 class SpecML(nn.Module): 
-    def __init__(self, d = D_emb, h = n_heads, n_layers = n_layers, ff = ffn_dim, patch_dim = patch_size + 2): #avengers assemble
+    def __init__(self, patch_dim, d = D_emb, h = n_heads, n_layers = n_layers, ff = ffn_dim): #avengers assemble
         super().__init__() 
         self.embed = nn.Linear(patch_dim, d) #takes in dimensions from patch_dim and gives something with dimensions d_emb
         nn.init.trunc_normal_(self.embed.weight, mean=0.0, std=1 / d, a=-3 / d, b=3 / d)

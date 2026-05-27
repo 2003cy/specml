@@ -28,8 +28,9 @@ f = data['flux'][np.ix_(valid_w, valid_spectrum)].T / (w**2) #Converts Flux valu
 # w = 469 -> amount of valid wavelengths
 # f = B x L = 42195, 469 -> B is the batch amount e.g. amount of spectrum with valid data,, L is the observation length e.g. amount of valid wavelength values
 
-scale = np.nanmedian(np.abs(f), axis=1, keepdims=True).clip(1e-30) #identifies a scale of the median flux values
-f_norm = np.arcsinh(f / scale) #normalises the flux values using the scale previously defined and an arcsin
+# scale = np.nanmedian(np.abs(f), axis=1, keepdims=True).clip(1e-30) #identifies a scale of the median flux values
+# f_norm = np.arcsinh(f / scale) #normalises the flux values using the scale previously defined and an arcsin
+f_norm = (f -  np.mean(f,keepdims=True,axis=1)) / np.std(f,keepdims=True,axis=1)
 
 # Data Quality validity — (B, L): True where the detector pixel is good, set up for later validity masking, assesses if a pixel/data point is valid using the valid column of the data file
 dq = data['valid'][np.ix_(valid_w, valid_spectrum)].T  # (B, L)
@@ -73,7 +74,7 @@ X[~V] = 0.0 #if it is not True, or the opposite of the Validity mask we just def
 #create patches over the wavelength array
 w_patches = sliding_window_view(w, patch_size)[::step_size].mean(axis=1)  # (T,) amount of patches made from wavelength array, the vector w_patches consists of the mean from that patch
 omegas = 10000 ** (-2 * np.arange(D_emb // 2) / D_emb) #Defined from OmniSpec paper (Md Khairul Islam1 & Judy Fox, 2026)
-product = np.outer(w_patches, omegas)  # (T, D_EMB//2) 
+product = np.outer(w_patches * 1e4, omegas)  # (T, D_EMB//2) 
 
 #create empty P matrix of dimensions T x D_emb, T is the amount of patches x_t in X, and D_emb is our pre-defined embedding dimension imported from model script
 P = np.empty((X.shape[1], D_emb)) #only required these two dimensions for P because it is already going over the batch size within X.shape[1]
