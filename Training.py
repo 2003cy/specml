@@ -8,14 +8,14 @@ from Tokeniser import patch_size, step_size, P, V, X
 
 #------------------------------------------TRAINING PARAMETERS----------------------------------------------------#
 
-N_STEPS_PER_RESTART = 16000  # gradient steps
+N_STEPS_PER_RESTART = 8000  # gradient steps
 BATCH_SIZE = 128  # spectra per batch
-LR = 5e-4  # AdamW learning rate
+LR = 1e-5  # AdamW learning rate
 WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 1.0  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
-NUM_RESTARTS = 2  # number of annealing cycles
+NUM_RESTARTS = 4  # number of annealing cycles
 N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 
 
