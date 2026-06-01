@@ -51,7 +51,7 @@ class SpectralBlock(nn.Module):
         self.ln1 = nn.LayerNorm(d) #Layer norm twice for individual trained parameters that learn differently in each LN to be applied to different sections
         self.attn = SpectralAttention(d, h)
         self.ln2 = nn.LayerNorm(d) 
-        self.ffn = nn.Seuential(nn.Linear(d, ff), nn.GELU(), nn.Linear(ff, d)) #Feed Forward Network, GELU more suited for Transformer Architecture
+        self.ffn = nn.Sequential(nn.Linear(d, ff), nn.GELU(), nn.Linear(ff, d)) #Feed Forward Network, GELU more suited for Transformer Architecture
     def forward(self, x, validity): #Call spectral block, will then call the forward and it will add the attn from ln1 only with valid tokens to x and also apply the ffn to x
         x = x + self.attn(self.ln1(x), validity) 
         x = x + self.ffn(self.ln2(x)) 

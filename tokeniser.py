@@ -6,8 +6,8 @@ from SpecML import D_emb
 #------------------------------------------CONFIGURATION/DATA SETUP----------------------------------------------------#
 
 # Parameters
-patch_size = 20 
-overlap = 10
+patch_size = 10
+overlap = 3
 step_size = patch_size - overlap 
 
 
@@ -61,8 +61,6 @@ X = np.concatenate([np.nanmean(x_t,axis=2, keepdims = True), np.nanstd(x_t,axis=
 dq_patches = sliding_window_view(dq, patch_size, axis=1)[:, ::step_size]  # (B, T, P)
 V = np.array(dq_patches.all(axis=2))  # (B, T), tests whether array elements along P axis of dq_patches evaluates to true and creates an array of this
 X[~V] = 0.0 #if it is not True, or the opposite of the Validity mask we just defined, then it is invalid and will be replaced by 0.0
-
-
 
 
 #------------------------------------------WAVELENGTH ENCODING----------------------------------------------------#

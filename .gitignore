@@ -3,7 +3,14 @@
 !.pixi/config.toml
 .vscode
 *.csv
+*.csv.gz
 *.fits
 
 2025-05-01-nirspec-merged-table-v4.ipynb
 *png
+*.npy
+*.pt
+
+__pycache__/
+
+.DS_Store

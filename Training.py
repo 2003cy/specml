@@ -3,9 +3,10 @@ import torch
 
 from SpecML import SpecML
 from Tokeniser import patch_size, step_size, P, V, X
+import time
 
 
-
+start_time = time.time()
 #------------------------------------------TRAINING PARAMETERS----------------------------------------------------#
 
 N_STEPS_PER_RESTART = 20000  # gradient steps
@@ -110,3 +111,6 @@ if __name__ == '__main__':
 
     torch.save(model.state_dict(), 'SpecML.pt')
     np.save('loss_curve.npy', np.array(loss_curve))
+
+end_time = time.time() - start_time
+print(end_time)
