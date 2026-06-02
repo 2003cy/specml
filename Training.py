@@ -69,12 +69,11 @@ def mse_loss(Y, Yhat, M):
 
 def train_trial(trial, device):
     # Tokenisation hyperparameters
-    patch_s, overlap = trial.suggest_categorical('stride', [
-    (p, max(1, int(p * (op / 100))))
-    for p in range(4, 21, 2)          # patch sizes: 4, 6, 8 ... 20
-    for op in range(10, 60, 10)        # overlap %:   10, 20, 30, 40, 50
-    ])
-    
+    patch_s, overlap = [int(x) for x in trial.suggest_categorical('stride', [
+    f"{p},{max(1, int(p * (op / 100)))}"
+    for p in range(4, 21, 2)
+    for op in range(10, 60, 10)
+    ]).split(',')]
     step_s = patch_s - overlap
 
     # Model hyperparameters
