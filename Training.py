@@ -183,7 +183,7 @@ def train_trial(trial, device):
             raise optuna.TrialPruned()
 
     return best_loss
-    if __name__ == '__main__':
+if __name__ == '__main__':
         device = 'cpu'
     if torch.cuda.is_available():
         device = 'cuda'
