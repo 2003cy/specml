@@ -13,10 +13,8 @@ catalog = Table.read('dja_msaexp_emission_lines_v4.5.csv.gz', format='ascii')
 catalog = catalog[catalog['grating'] == 'PRISM']
 catalog = catalog[valid_spectrum]
 
-mask_g3 = np.array(
-    (np.array(catalog['grade'].filled(0)) == 3) & (np.array(catalog['z_best']) >= 0)
-)
-z_g3 = torch.from_numpy(np.array(catalog['z_best'][mask_g3], dtype=np.float32))
+mask_ew = np.array((catalog['line_ha_nii']/catalog['line_ha_nii_err']) >= 3)
+ew = torch.from_numpy(np.array(catalog['line_ha_nii'][mask_ew], dtype=np.float32)) 
 
 # ---- Encode grade-3 spectra with frozen model --------------------------------
 device = 'cpu'
@@ -25,12 +23,10 @@ if torch.cuda.is_available():
 if torch.backends.mps.is_available():
     device = 'mps'
 
-patch_size = 10
-model_file = 'SpecML 20260602 n20000 lr5e-4 4r 10PS 4OL.pt'
-#hardcode patch size to match from file because one in tokensier wont match, will have to hardcode demb as well
-
-model = SpecML(patch_dim = patch_size + 2).to(device)
-model.load_state_dict(torch.load('SpecML 20260602 n20000 lr5e-4 4r 10PS 4OL.pt', map_location=device, weights_only=True))
+model = SpecML(patch_dim=patch_size + 2).to(device)
+model.load_state_dict(
+    torch.load('SpecML 20260602 n20000 lr5e-4 4r 10PS 4OL.pt', map_location=device, weights_only=True)
+)
 model.eval()
 
 with torch.no_grad():
@@ -92,9 +88,9 @@ ax.scatter(
 ax.plot(lim, lim, 'k--', lw=0.8)
 ax.set_xlim(lim)
 ax.set_ylim(lim)
-ax.set_xlabel('ha_EW_true')
-ax.set_ylabel('ha_EW_pred')
-ax.set_title('True vs predicted H_alpha Equivalent Widths')
+ax.set_xlabel('z_true')
+ax.set_ylabel('z_pred')
+ax.set_title('True vs predicted redshift')
 sm = plt.cm.ScalarMappable(cmap='plasma', norm=plt.Normalize(0, 0.1))
 fig.colorbar(sm, ax=ax, label='|Δz|/(1+z)')
 
@@ -105,13 +101,13 @@ ax.axvline(
 )
 ax.set_xlabel('|Δz| / (1+z)')
 ax.set_ylabel('count')
-ax.set_title('Ha_EW error distribution')
+ax.set_title('Redshift error distribution')
 ax.legend()
 
 plt.tight_layout()
-plt.savefig('downstream_linea_Ha_EW.png', dpi=150)
+plt.savefig('downstream_linear.png', dpi=150)
 plt.show()
-print('Saved downstream_linear_Ha_EW.png')
+print('Saved downstream_linear.png')
 
 
 

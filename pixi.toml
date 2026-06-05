@@ -22,4 +22,7 @@ pytorch = ">=2.10.0,<3"
 [target.linux-64.dependencies]
 pytorch-gpu = ">=2.10.0,<3"
 
+[pypi-dependencies]
+pytorch-lightning = ">=2.6.5, <3"
+
 
