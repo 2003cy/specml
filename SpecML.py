@@ -5,9 +5,9 @@ import torch.nn.functional as F
 
 #------------------------------------------HYPER PARAMETERS----------------------------------------------------#
 #these will change the size of the model
-D_emb = 256 #Embedding Dimension
+D_emb = 384 #Embedding Dimension
 n_heads = 8 #The number of parallel attentions you do at the same time
-n_layers = 4  #The number of times a block is stacked, each time different weights will be learnt
+n_layers = 8  #The number of times a block is stacked, each time different weights will be learnt
 ffn_dim = 4 * D_emb #Dimension of Feed Forward Network, FFN is how the vectors communicate within the vectors
 DROPOUT = 0.0  # dropout probability applied after attention and FFN residuals
 
@@ -69,7 +69,7 @@ class SpecML(nn.Module):
     def __init__(self, patch_dim, d=D_emb, h=n_heads, n_layers=n_layers, ff=ffn_dim, dropout=DROPOUT): #avengers assemble
         super().__init__()
         self.embed = nn.Linear(patch_dim, d) #takes in dimensions from patch_dim and gives something with dimensions d_emb
-        nn.init.trunc_normal_(self.embed.weight, mean=0.0, std=1 / d, a=-3 / d, b=3 / d)
+        nn.init.trunc_normal_(self.embed.weight, mean=0.0, std=0.02, a=-0.06, b=0.06)
         self.blocks = nn.ModuleList([SpectralBlock(d, h, ff, dropout) for _ in range(n_layers)]) #.blocks is a list of n_layer spectral blocks
         self.norm = nn.LayerNorm(d) #normalises all the vectors in that matrix to ensure everything is in the same range
         self.head = nn.Linear(d, patch_dim) #this is the decoder

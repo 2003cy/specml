@@ -14,14 +14,14 @@ import torch.nn as nn
 start_time = time.time()
 #------------------------------------------TRAINING PARAMETERS----------------------------------------------------#
 
-N_STEPS_PER_RESTART = 20000  # gradient steps
+N_STEPS_PER_RESTART = 5000  # gradient steps
 BATCH_SIZE = 1024  # spectra per batch
 LR = 1e-4  # AdamW learning rate
 WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 1.0  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
-NUM_RESTARTS = 8  # number of annealing cycles
+NUM_RESTARTS = 6  # number of annealing cycles
 WARMUP_STEPS = 2000
 N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
@@ -29,7 +29,7 @@ TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
 #-------------------------------------------------MASKING-----------------------------------------------------------#
 
 CHUNK_WIDTH = int(np.floor(2.5 * patch_size / step_size)) # chunk width in tokens
-MASK_RATIO = 0.75  # fraction of max_chunks to mask per spectrum
+MASK_RATIO = 0.5  # fraction of max_chunks to mask per spectrum
 
 def apply_chunk_mask_batch(
     y_b: torch.Tensor,
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     logger = CSVLogger(save_dir='outputs/', name='specml')
 
     trainer = pl.Trainer(
-        max_epochs=400,
+        max_epochs=1000,
         gradient_clip_val=GRAD_CLIP,
         callbacks=[checkpoint_cb, early_stop_cb],
         log_every_n_steps=10,
