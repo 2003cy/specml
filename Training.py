@@ -8,7 +8,6 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 from SpecML import SpecML
 from Tokeniser import patch_size, overlap, P, V, X
 import time
-import torch.nn as nn
 
 
 start_time = time.time()
@@ -21,7 +20,7 @@ WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 1.0  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
-NUM_RESTARTS = 6  # number of annealing cycles
+NUM_RESTARTS = 7  # number of annealing cycles — fills max_epochs=500 exactly at 74 steps/epoch
 WARMUP_STEPS = 2000
 N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
@@ -107,6 +106,18 @@ class SpecMLLit(pl.LightningModule):
         }
 
 
+#-------------------------------------------------LOSS TRACKER-----------------------------------------------------------#
+
+class LossTracker(pl.Callback):
+    def __init__(self):
+        self.val_losses = []
+
+    def on_validation_epoch_end(self, trainer, _pl_module):
+        v = trainer.callback_metrics.get('val_loss')
+        if v is not None:
+            self.val_losses.append(float(v))
+
+
 #-------------------------------------------------TRAINING-----------------------------------------------------------#
 
 if __name__ == '__main__':
@@ -133,25 +144,29 @@ if __name__ == '__main__':
     )
     early_stop_cb = EarlyStopping(
         monitor='val_loss',
-        patience=200,  # high patience for self-supervised training where loss oscillates with cosine restarts
+        patience=200,
         mode='min',
     )
+    loss_tracker = LossTracker()
 
     logger = CSVLogger(save_dir='outputs/', name='specml')
 
     trainer = pl.Trainer(
-        max_epochs=1000,
+        max_epochs=500,
+        accelerator='auto',
         gradient_clip_val=GRAD_CLIP,
-        callbacks=[checkpoint_cb, early_stop_cb],
+        callbacks=[checkpoint_cb, early_stop_cb, loss_tracker],
         log_every_n_steps=10,
         logger=logger,
     )
 
     # To resume from a checkpoint, pass: ckpt_path='checkpoints/last.ckpt'
-    trainer.fit(lit_model, train_loader, val_loader)
-
-    # Save final weights in original flat format
-    torch.save(lit_model.model.state_dict(), 'SpecML.pt')
+    try:
+        trainer.fit(lit_model, train_loader, val_loader)
+    finally:
+        torch.save(lit_model.model.state_dict(), 'SpecML.pt')
+        np.save('loss.npy', np.array(loss_tracker.val_losses))
+        print(f'Saved SpecML.pt and loss.npy ({len(loss_tracker.val_losses)} epochs recorded)')
 
 end_time = time.time() - start_time
 print(end_time)
