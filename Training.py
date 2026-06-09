@@ -6,7 +6,7 @@ from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import TensorDataset, DataLoader, random_split
 
 from SpecML import SpecML
-from Tokeniser import patch_size, overlap, step_size, P, V, X
+from Tokeniser import patch_size, overlap, P, V, X
 import time
 import torch.nn as nn
 
@@ -15,8 +15,8 @@ start_time = time.time()
 #------------------------------------------TRAINING PARAMETERS----------------------------------------------------#
 
 N_STEPS_PER_RESTART = 5000  # gradient steps
-BATCH_SIZE = 1024  # spectra per batch
-LR = 1e-4  # AdamW learning rate
+BATCH_SIZE = 512  # spectra per batch
+LR = 3e-4  # AdamW learning rate
 WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 1.0  # gradient clip max norm
@@ -28,36 +28,14 @@ TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
 
 #-------------------------------------------------MASKING-----------------------------------------------------------#
 
-CHUNK_WIDTH = int(np.floor(2.5 * patch_size / step_size)) # chunk width in tokens
-MASK_RATIO = 0.5  # fraction of max_chunks to mask per spectrum
+MASK_RATIO = 0.5  # fraction of valid tokens to mask per spectrum
 
-def apply_chunk_mask_batch(
+def apply_random_mask_batch(
     y_b: torch.Tensor,
     v_b: torch.Tensor,
     mask_ratio: float = MASK_RATIO,
-    chunk_width: int = CHUNK_WIDTH,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Mask one batch entirely on device"""
-    B, T, _ = y_b.shape
-    device = y_b.device
-    M = torch.zeros(B, T, dtype=torch.bool, device=device)
-
-    valid_lens = v_b.sum(dim=1).int()
-    n_chunks = valid_lens // chunk_width
-    k = ((((n_chunks + 1) // 2) * mask_ratio).int()).clamp(min=1)
-    section = valid_lens // k.clamp(min=1)
-    usable = (valid_lens >= chunk_width) & (section >= chunk_width)
-
-    offsets = torch.arange(chunk_width, device=device)
-    k_max = int(k[usable].max()) if usable.any() else 0
-
-    for j in range(k_max):
-        active = torch.where(usable & (k > j))[0]
-        sec = section[active]
-        u = torch.rand(len(active), device=device)
-        starts = (j * sec + u * (sec - chunk_width + 1)).int()
-        M[active[:, None], starts[:, None] + offsets] = True
-
+    M = (torch.rand(y_b.shape[:2], device=y_b.device) < mask_ratio) & v_b
     x_b = y_b.clone()
     x_b[M] = 0.0
     return x_b, M
@@ -100,7 +78,7 @@ class SpecMLLit(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         y_b, v_b = batch
-        x_b, m_b = apply_chunk_mask_batch(y_b, v_b)
+        x_b, m_b = apply_random_mask_batch(y_b, v_b)
         Yhat = self.model(x_b, v_b, self.P)
         loss = mse_loss(y_b, Yhat, m_b)
         self.log('train_loss', loss, on_step=True, prog_bar=True)
@@ -108,7 +86,7 @@ class SpecMLLit(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         y_b, v_b = batch
-        x_b, m_b = apply_chunk_mask_batch(y_b, v_b)
+        x_b, m_b = apply_random_mask_batch(y_b, v_b)
         Yhat = self.model(x_b, v_b, self.P)
         loss = mse_loss(y_b, Yhat, m_b)
         self.log('val_loss', loss, on_epoch=True, prog_bar=True)
@@ -139,8 +117,8 @@ if __name__ == '__main__':
     n_train = int(len(dataset) * TRAIN_VAL_SPLIT)
     n_val = len(dataset) - n_train
     train_ds, val_ds = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, persistent_workers=True)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, persistent_workers=True)
 
     lit_model = SpecMLLit(patch_dim=patch_size + 2, P_enc=P, patch_size=patch_size, overlap=overlap)
 
