@@ -15,13 +15,13 @@ start_time = time.time()
 
 N_STEPS_PER_RESTART = 5000  # gradient steps
 BATCH_SIZE = 256  # spectra per batch
-LR = 2e-4  # AdamW learning rate
+LR = 1e-4  # AdamW learning rate
 WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
-GRAD_CLIP = 1.0  # gradient clip max norm
+GRAD_CLIP = 0.5  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
 NUM_RESTARTS = 14  # number of annealing cycles — fills max_epochs≈486 at 148 steps/epoch
-WARMUP_STEPS = 2000
+WARMUP_STEPS = 4000  # longer warmup for the deeper 10-layer model
 N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
 
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     logger = CSVLogger(save_dir='outputs/', name='specml')
 
     trainer = pl.Trainer(
-        max_epochs=486,
+        max_epochs=500,
         accelerator='auto',
         gradient_clip_val=GRAD_CLIP,
         callbacks=[checkpoint_cb, early_stop_cb, loss_tracker],
