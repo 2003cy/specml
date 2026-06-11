@@ -7,9 +7,9 @@ import torch.nn.functional as F
 
 #------------------------------------------HYPER PARAMETERS----------------------------------------------------#
 #these will change the size of the model
-D_emb = 512 #Embedding Dimension
+D_emb = 384 #Embedding Dimension
 n_heads = 8 #The number of parallel attentions you do at the same time
-n_layers = 10  #The number of times a block is stacked, each time different weights will be learnt
+n_layers = 8  #The number of times a block is stacked, each time different weights will be learnt
 ffn_dim = 4 * D_emb #Dimension of Feed Forward Network, FFN is how the vectors communicate within the vectors
 DROPOUT = 0.0  # dropout probability applied after attention and FFN residuals
 

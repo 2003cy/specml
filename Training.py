@@ -15,13 +15,13 @@ start_time = time.time()
 
 N_STEPS_PER_RESTART = 5000  # gradient steps
 BATCH_SIZE = 256  # spectra per batch
-LR = 1e-4  # AdamW learning rate
+LR = 2e-4  # AdamW learning rate — back to the value that was stable for the 384/8 model
 WEIGHT_DECAY = 0.01  # AdamW weight decay
 BETAS = (0.9, 0.95)  # AdamW β₁, β₂
 GRAD_CLIP = 0.5  # gradient clip max norm
 SCHED_ETA_MIN = 1e-6  # minimum LR after annealing
-NUM_RESTARTS = 14  # number of annealing cycles — fills max_epochs≈486 at 148 steps/epoch
-WARMUP_STEPS = 4000  # longer warmup for the deeper 10-layer model
+NUM_RESTARTS = 14  # number of annealing cycles — fills max_epochs=500 at 148 steps/epoch
+WARMUP_STEPS = 4000
 N_STEPS = N_STEPS_PER_RESTART * NUM_RESTARTS
 TRAIN_VAL_SPLIT = 0.9  # fraction of data used for training
 
