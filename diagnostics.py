@@ -17,7 +17,7 @@ deriv = 1.0 / (scale * np.sqrt(1 + (f / scale) ** 2) * std_arcsinh)
 err_norm = err * deriv  # per-pixel noise std in f_norm units, (B, L)
 
 err_patches = sliding_window_view(err_norm, patch_size, axis=1)[:, ::step_size]  # (B, T, P)
-noise_var_per_pixel = np.nanmean(err_patches ** 2)  # avg noise variance per raw pixel (z-score units)
+noise_var_per_pixel = np.nanmedian(err_patches ** 2)  # typical noise variance per raw pixel (z-score units), robust to outlier-error pixels
 noise_floor_raw = noise_var_per_pixel * patch_size  # sum over P=4 raw-flux dims
 
 print('=== Noise floor (from instrument flux errors) ===')
