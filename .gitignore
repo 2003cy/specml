@@ -5,6 +5,7 @@
 *.csv
 *.csv.gz
 *.fits
+*.log
 
 2025-05-01-nirspec-merged-table-v4.ipynb
 *png
