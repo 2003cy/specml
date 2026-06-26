@@ -60,7 +60,9 @@ class WarmupCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
         if self.last_epoch < self.warmup_steps:
             return [base_lr * self.last_epoch / max(1, self.warmup_steps)
                     for base_lr in self.base_lrs]
-        progress = (self.last_epoch - self.warmup_steps) / max(1, self.T_0 - self.warmup_steps)
+        # One-time warmup, then SGDR cosine restarts of period T_0 steps each
+        # (NOT T_0 - warmup_steps, which made the cycle 5x too short).
+        progress = (self.last_epoch - self.warmup_steps) / max(1, self.T_0)
         cosine = 0.5 * (1 + np.cos(np.pi * (progress % 1.0)))
         return [self.eta_min + (base_lr - self.eta_min) * cosine
                 for base_lr in self.base_lrs]

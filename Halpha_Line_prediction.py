@@ -5,57 +5,60 @@ import torch.nn as nn
 import torch.nn.functional as F
 from astropy.table import Table
 
-from SpecML import D_emb, SpecML
-from Tokeniser import patch_size, P, V, X, valid_spectrum
+from SpecML import load_specml
+from Tokeniser import f, dq, w, valid_spectrum, valid_spectra, tokenize, normalise_flux
 
-# ---- Load catalog and align to valid spectra ---------------------------------
+# ---- Load model (params come from the checkpoint itself) --------------------
+model_file = 'SpecML.pt'
+
+device = ('cuda' if torch.cuda.is_available() else
+          'mps'  if torch.backends.mps.is_available() else 'cpu')
+
+model, cfg = load_specml(model_file, device=device)
+
+# ---- Tokenise with the SAME preprocessing + patch params used in training ----
+f_norm = normalise_flux(f)   # arcsinh stretch + z-score (matches Tokeniser/Training)
+X, V, P = tokenize(f_norm, dq, w, cfg['patch_size'], cfg['overlap'], cfg['D_emb'])
+
+# ---- Load catalog and align to valid spectra --------------------------------
 catalog = Table.read('dja_msaexp_emission_lines_v4.5.csv.gz', format='ascii')
 catalog = catalog[catalog['grating'] == 'PRISM']
-catalog = catalog[valid_spectrum]
+catalog = catalog[valid_spectrum][valid_spectra]
 
-mask_ew = np.array((catalog['line_ha_nii']/catalog['line_ha_nii_err']) >= 3)
-ew = torch.from_numpy(np.array(catalog['line_ha_nii'][mask_ew], dtype=np.float32)) 
+# ---- Target: Hα+NII line (line_ha_nii), require S/N >= 3 --------------------
+ha     = np.array(catalog['line_ha_nii'],     dtype=np.float32)
+ha_err = np.array(catalog['line_ha_nii_err'], dtype=np.float32)
+mask_ew = np.isfinite(ha) & np.isfinite(ha_err) & (ha_err > 0) & (ha >= 3 * ha_err)
+y_ha = torch.from_numpy(ha[mask_ew])
 
-# ---- Encode grade-3 spectra with frozen model --------------------------------
-device = 'cpu'
-if torch.cuda.is_available():
-    device = 'cuda'
-if torch.backends.mps.is_available():
-    device = 'mps'
-
-model = SpecML(patch_dim=patch_size + 2).to(device)
-model.load_state_dict(
-    torch.load('SpecML 20260602 n20000 lr5e-4 4r 10PS 4OL.pt', map_location=device, weights_only=True)
-)
-model.eval()
-
+# ---- Encode selected spectra ------------------------------------------------
 with torch.no_grad():
     emb = model.encode(
-        torch.from_numpy(X[mask_g3]).float().to(device),
-        torch.from_numpy(V[mask_g3]).bool().to(device),
+        torch.from_numpy(X[mask_ew]).float().to(device),
+        torch.from_numpy(V[mask_ew]).bool().to(device),
         torch.from_numpy(P).float().to(device),
     ).cpu()
 
 # ---- 50/50 train/test split --------------------------------------------------
-n = len(z_g3)
+n = len(y_ha)
 idx = torch.randperm(n, generator=torch.Generator().manual_seed(42))
 split = n // 2
 
 emb_train, emb_test = emb[idx[:split]], emb[idx[split:]]
-z_train, z_test = z_g3[idx[:split]], z_g3[idx[split:]]
+y_train, y_test = y_ha[idx[:split]], y_ha[idx[split:]]
 
 # ---- Normalize targets to stabilise optimisation ----------------------------
-z_mean, z_std = z_train.mean(), z_train.std()
-z_train_n = (z_train - z_mean) / z_std
+y_mean, y_std = y_train.mean(), y_train.std()
+y_train_n = (y_train - y_mean) / y_std
 
 # ---- Linear head, encoder frozen --------------------------------------------
-head = nn.Sequential(nn.LayerNorm(D_emb), nn.Linear(D_emb, 1))
-opt = torch.optim.AdamW(head.parameters(), lr=1e-2) #changed from 1e-3
+head = nn.Sequential(nn.LayerNorm(cfg['D_emb']), nn.Linear(cfg['D_emb'], 1))
+opt = torch.optim.AdamW(head.parameters(), lr=1e-2)
 
 head.train()
 for step in range(2000):
-    batch = torch.randint(len(emb_train), (256,)) 
-    loss = F.mse_loss(head(emb_train[batch]).squeeze(-1), z_train_n[batch])
+    batch = torch.randint(len(emb_train), (256,))
+    loss = F.mse_loss(head(emb_train[batch]).squeeze(-1), y_train_n[batch])
     opt.zero_grad()
     loss.backward()
     opt.step()
@@ -65,58 +68,42 @@ for step in range(2000):
 # ---- Evaluate ----------------------------------------------------------------
 head.eval()
 with torch.no_grad():
-    z_pred = head(emb_test).squeeze(-1) * z_std + z_mean
+    y_pred = head(emb_test).squeeze(-1) * y_std + y_mean
 
-dz = (z_pred - z_test).abs() / (1 + z_test)
-print(f'grade-3 test set:  N={len(z_test)}')
-print(f'MAE                {(z_pred - z_test).abs().mean().item():.4f}')
-print(f'median |Δz|/(1+z)  {dz.median().item():.4f}')
+print(f'test set:  N={len(y_test)}')
+print(f'MAE                {(y_pred - y_test).abs().mean().item():.4f}')
 
 # ---- Plot --------------------------------------------------------------------
-
-z_true_np = z_test.numpy()
-z_pred_np = z_pred.numpy()
-dz_np = dz.numpy()
+y_true_np = y_test.numpy()
+y_pred_np = y_pred.numpy()
+resid_np = np.abs(y_pred_np - y_true_np)
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 ax = axes[0]
-lim = (0, max(z_true_np.max(), z_pred_np.max()) * 1.05)
-ax.scatter(
-    z_true_np, z_pred_np, c=dz_np, cmap='plasma', s=8, alpha=0.7, vmin=0, vmax=0.1
-)
+lim = (min(y_true_np.min(), y_pred_np.min()),
+       max(y_true_np.max(), y_pred_np.max()) * 1.05)
+ax.scatter(y_true_np, y_pred_np, c=resid_np, cmap='plasma', s=8, alpha=0.7)
 ax.plot(lim, lim, 'k--', lw=0.8)
 ax.set_xlim(lim)
 ax.set_ylim(lim)
-ax.set_xlabel('z_true')
-ax.set_ylabel('z_pred')
-ax.set_title('True vs predicted redshift')
-sm = plt.cm.ScalarMappable(cmap='plasma', norm=plt.Normalize(0, 0.1))
-fig.colorbar(sm, ax=ax, label='|Δz|/(1+z)')
+ax.set_xlabel('line_ha_nii true')
+ax.set_ylabel('line_ha_nii pred')
+ax.set_title('True vs predicted Hα+NII line')
+fig.colorbar(plt.cm.ScalarMappable(cmap='plasma'), ax=ax, label='|pred - true|')
 
 ax = axes[1]
-ax.hist(dz_np, bins=40, range=(0, 0.3), color='steelblue', edgecolor='none')
+ax.hist(resid_np, bins=40, color='steelblue', edgecolor='none')
 ax.axvline(
-    float(dz.median()), color='red', lw=1.2, label=f'median={float(dz.median()):.4f}'
+    float(np.median(resid_np)), color='red', lw=1.2,
+    label=f'median={float(np.median(resid_np)):.4f}'
 )
-ax.set_xlabel('|Δz| / (1+z)')
+ax.set_xlabel('|pred - true|')
 ax.set_ylabel('count')
-ax.set_title('Redshift error distribution')
+ax.set_title('Hα+NII error distribution')
 ax.legend()
 
 plt.tight_layout()
-plt.savefig('downstream_linear.png', dpi=150)
+plt.savefig('downstream_linear_Ha.png', dpi=150)
 plt.show()
-print('Saved downstream_linear.png')
-
-
-
-
-
-
-
-
-
-
-
-
+print('Saved downstream_linear_Ha.png')

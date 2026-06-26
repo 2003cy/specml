@@ -3,6 +3,29 @@ from numpy.lib.stride_tricks import sliding_window_view
 from astropy.table import Table
 from SpecML import D_emb
 
+#------------------------------------------PREPROCESSING (single source of truth)----------------------------------------------------#
+
+def normalise_flux(f):
+    """The exact preprocessing the model is trained on. Use this everywhere
+    (training AND downstream) so train/inference inputs never drift apart.
+
+    f : (B, L) raw flux, already divided by lambda**2.
+
+    Steps:
+      1. scale each spectrum by its median(|flux|)  -> robust to emission-line spikes
+      2. arcsinh                                     -> linear near 0, logarithmic for spikes
+      3. per-spectrum z-score standardisation of the arcsinh values
+
+    NaN-aware (nanmedian/nanmean/nanstd) so a single bad pixel can't poison the
+    whole spectrum's statistics.
+    """
+    scale     = np.nanmedian(np.abs(f), axis=1, keepdims=True).clip(1e-30)
+    f_arcsinh = np.arcsinh(f / scale)
+    mu        = np.nanmean(f_arcsinh, axis=1, keepdims=True)
+    sd        = np.nanstd(f_arcsinh, axis=1, keepdims=True)
+    return (f_arcsinh - mu) / sd
+
+
 #------------------------------------------CONFIGURATION/DATA SETUP----------------------------------------------------#
 
 # Parameters
@@ -37,12 +60,19 @@ valid_spectra = spec_std > MIN_STD
 f = f[valid_spectra]
 dq = dq[valid_spectra]
 
-# arcsinh compression: scale by the median |flux| (robust to emission-line spikes,
-# unlike std), then arcsinh — linear near zero, logarithmic for large spikes.
-# Then z-score the compressed values so the bulk of pixels still have unit variance.
-scale = np.nanmedian(np.abs(f), axis=1, keepdims=True).clip(1e-30)
-f_arcsinh = np.arcsinh(f / scale)
-f_norm = (f_arcsinh - np.mean(f_arcsinh, keepdims=True, axis=1)) / np.std(f_arcsinh, keepdims=True, axis=1)
+# arcsinh stretch + per-spectrum z-score — see normalise_flux() (single source of truth).
+f_norm = normalise_flux(f)
+
+# Per-pixel noise propagated into the SAME normalised space as f_norm, via the
+# chain rule through arcsinh(f/scale) then the per-spectrum z-score:
+#   d(f_norm)/d(f) = 1 / (scale * sqrt(1+(f/scale)^2) * std_arcsinh)
+# Lets downstream analysis mask low-S/N pixels (large err_norm) without dropping
+# them from plots. Source is the spectra FITS 'err' column (same as diagnostics.py).
+scale       = np.nanmedian(np.abs(f), axis=1, keepdims=True).clip(1e-30)
+std_arcsinh = np.nanstd(np.arcsinh(f / scale), axis=1, keepdims=True)
+err = data['err'][np.ix_(valid_w, valid_spectrum)].T / (w**2)
+err = err[valid_spectra]
+err_norm = err / (scale * np.sqrt(1.0 + (f / scale) ** 2) * std_arcsinh)
 
 
 

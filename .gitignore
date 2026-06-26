@@ -5,12 +5,19 @@
 *.csv
 *.csv.gz
 *.fits
+*.log
 
 2025-05-01-nirspec-merged-table-v4.ipynb
 *png
+!Figures/*.png
 *.npy
 *.pt
 
 __pycache__/
 
 .DS_Store
+
+# Optuna study artifacts (DB is resumable but large; YAML results are kept)
+optuna/*.db
+optuna/*.db-journal
+!optuna/best_params.yaml
