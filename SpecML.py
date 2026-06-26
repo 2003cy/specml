@@ -96,7 +96,8 @@ class SpecML(nn.Module):
     def encode(self, X, V, P):
         x = self._encode(X, V, P)  # [B, T, D]
         mask = V.unsqueeze(-1).to(x.dtype)  # [B, T, 1]
-        return (x * mask).sum(dim=1) / mask.sum(dim=1)  # [B, D]
+        # clamp denom so a spectrum with zero valid tokens gives 0, not NaN
+        return (x * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)  # [B, D]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
