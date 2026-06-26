@@ -15,3 +15,8 @@
 __pycache__/
 
 .DS_Store
+
+# Optuna study artifacts (DB is resumable but large; YAML results are kept)
+optuna/*.db
+optuna/*.db-journal
+!optuna/best_params.yaml
