@@ -6,18 +6,18 @@ import torch.nn.functional as F
 from astropy.table import Table
 
 from SpecML import load_specml
-from Tokeniser import f, dq, w, valid_spectrum, valid_spectra, tokenize
+from Tokeniser import f, dq, w, valid_spectrum, valid_spectra, tokenize, normalise_flux
 
 # ---- Load model (params come from the checkpoint itself) --------------------
-model_file = 'SpecML 20260602 n20000 lr5e-4 4r 10PS 4OL.pt'
+model_file = 'SpecML.pt'
 
 device = ('cuda' if torch.cuda.is_available() else
           'mps'  if torch.backends.mps.is_available() else 'cpu')
 
 model, cfg = load_specml(model_file, device=device)
 
-# ---- Tokenise with the patch params the model was actually trained with -----
-f_norm = (f - np.mean(f, axis=1, keepdims=True)) / np.std(f, axis=1, keepdims=True).clip(1e-10)
+# ---- Tokenise with the SAME preprocessing + patch params used in training ----
+f_norm = normalise_flux(f)   # arcsinh stretch + z-score (matches Tokeniser/Training)
 X, V, P = tokenize(f_norm, dq, w, cfg['patch_size'], cfg['overlap'], cfg['D_emb'])
 
 # ---- Load catalog and align to valid spectra --------------------------------
@@ -90,9 +90,9 @@ ax.scatter(
 ax.plot(lim, lim, 'k--', lw=0.8)
 ax.set_xlim(lim)
 ax.set_ylim(lim)
-ax.set_xlabel('ha_EW_true')
-ax.set_ylabel('ha_EW_pred')
-ax.set_title('True vs predicted H_alpha Equivalent Widths')
+ax.set_xlabel('z_true')
+ax.set_ylabel('z_pred')
+ax.set_title('True vs predicted redshift')
 sm = plt.cm.ScalarMappable(cmap='plasma', norm=plt.Normalize(0, 0.1))
 fig.colorbar(sm, ax=ax, label='|Δz|/(1+z)')
 
@@ -103,13 +103,13 @@ ax.axvline(
 )
 ax.set_xlabel('|Δz| / (1+z)')
 ax.set_ylabel('count')
-ax.set_title('Ha_EW error distribution')
+ax.set_title('Redshift error distribution')
 ax.legend()
 
 plt.tight_layout()
-plt.savefig('downstream_linea_Ha_EW.png', dpi=150)
+plt.savefig('downstream_redshift.png', dpi=150)
 plt.show()
-print('Saved downstream_linear_Ha_EW.png')
+print('Saved downstream_redshift.png')
 
 
 
