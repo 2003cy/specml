@@ -2,6 +2,7 @@
 .pixi/*
 !.pixi/config.toml
 .vscode
+.claude/*
 *.csv
 *.csv.gz
 *.fits
@@ -18,9 +19,9 @@ __pycache__/
 .DS_Store
 
 # Optuna study artifacts (DB is resumable but large; YAML results are kept)
-optuna/*.db
-optuna/*.db-journal
-optuna/studies
+specml/optuna/*.db
+specml/optuna/*.db-journal
+specml/optuna/studies
 
 #model outputs
 **/output/**
