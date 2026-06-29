@@ -1,0 +1,73 @@
+model:
+  embed_dim: 512
+  n_heads: 8
+  n_layers: 8
+  ffn_ratio: 4.0
+  dropout: 0.0
+  # tokenisation (the model owns normalisation + tokenisation + positional enc.)
+  patch_size: 4
+  overlap: 2
+  # masking
+  mask_ratio: 0.5
+  # loss weighting — this copy trains with clamp inverse-variance err-weighting:
+  #   w = 1/max(σ², err_weight_sigma_min),  σ² = Σ_patch err_norm² (token noise var)
+  # (val_loss stays unweighted; judge by the downstream σ_NMAD curve). "none" = plain MSE.
+  loss_weighting: invvar
+  err_weight_sigma_min: 0.5
+  # optimizer (AdamW)
+  lr: 2.0e-4
+  weight_decay: 0.004
+  betas: [0.9, 0.95]
+  # LR schedule: linear warmup, then a single cosine decay to min_lr (no restarts).
+  # ~74k total steps at 500 epochs → warmup 8000 ≈ 11% of the run (~54 epochs).
+  warmup_steps: 8000
+  min_lr: 1.0e-6
+
+data:
+  # Local PRISM spectra FITS. If absent it is downloaded once (from the DJA v4.5
+  # S3 URL baked into data/dataset.py) into SpecML/data/ and read from disk
+  # thereafter. Set fits_path to point at an existing local copy instead.
+  # fits_path: data/dja_msaexp_emission_lines_v4.5.prism_spectra.fits
+  min_std: 0.0          # drop near-flat spectra (raw flux std <= this)
+  batch_size: 256
+  num_workers: 4
+  train_val_split: 0.9
+  split_seed: 0
+
+trainer:
+  max_epochs: 500
+  accelerator: auto
+  devices: 1
+  precision: 32
+  gradient_clip_val: 0.5
+  log_every_n_steps: 10
+  enable_progress_bar: false
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: output/
+      name: specml_pretrain
+  callbacks:
+    - class_path: callbacks.EpochPrinter
+    - class_path: callbacks.PlotMetrics
+    - class_path: callbacks.DownstreamEval
+      init_args:
+        every_n_epochs: 10      # frozen-encoder redshift probe → ds_z_* in metrics
+        seeds: [0]
+        run_bpt: false
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        # auto_insert_metric_name=false so the placeholders aren't prefixed with
+        # their own name (which produced the doubled "stepstep=...valval_loss=...").
+        filename: "specml-epoch{epoch}-step{step}-valloss{val_loss:.4f}"
+        auto_insert_metric_name: false
+        every_n_train_steps: 5000
+        save_top_k: 3
+        monitor: val_loss
+        mode: min
+        save_last: true
+    - class_path: pytorch_lightning.callbacks.EarlyStopping
+      init_args:
+        monitor: val_loss
+        patience: 100
+        mode: min

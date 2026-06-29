@@ -1,0 +1,29 @@
+# Fixed knobs for the SpecML err-weighting hyperparameter search.
+# Everything in suggest_hparams() (optuna_train.py) is sampled per trial and
+# overrides these; what's left here is held constant across the whole study.
+
+model:
+  # architecture (n_heads fixed; embed_dim is searched and always divisible by 8)
+  n_heads: 8
+  ffn_ratio: 4.0
+  # tokenisation — FIXED. σ² = Σ_patch err_norm² scales with patch_size, so
+  # searching patch_size would entangle it with err_weight_sigma_min.
+  patch_size: 4
+  overlap: 2
+  # this study is for the err-weighted model
+  loss_weighting: invvar
+  # optimizer / schedule constants
+  betas: [0.9, 0.95]
+  min_lr: 1.0e-6
+
+data:
+  min_std: 0.0
+  batch_size: 256
+  num_workers: 4
+  train_val_split: 0.9
+  split_seed: 0
+
+# Redshift-probe objective (each trial is judged by this, every N epochs)
+probe:
+  every_n_epochs: 20
+  seeds: [0, 1]        # 2 seeds → less probe noise for the objective/pruning
